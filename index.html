@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pro Note</title>
+<style>
+  :root {
+    --brand:#7719aa; --bg:#ffffff; --fg:#242424; --muted:#707070; --ribbon:#faf9f8; --nav:#f3f2f1;
+    --line:#e1dfdd; --hover:#edebe9; --sel:#e8d9f1; --rule:#e6eef8; --canvas:#ffffff;
+    color-scheme: light;
+  }
+  :root[data-theme="dark"] {
+    --brand:#b46bdb; --bg:#1f1f1f; --fg:#f0f0f0; --muted:#a0a0a0; --ribbon:#2b2b2b; --nav:#262626;
+    --line:#3d3d3d; --hover:#383838; --sel:#4a2a5c; --rule:#2d3440; --canvas:#1f1f1f;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { display: flex; flex-direction: column; background: var(--bg); color: var(--fg);
+         font: 14px/1.4 "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; }
+  button, input, select { font: inherit; color: inherit; }
+
+  /* title bar */
+  #title { display: flex; align-items: center; gap: 14px; padding: 6px 12px; background: #7719aa; color: #fff; }
+  #title .logo { font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  #title .logo i { background: #fff; color: #7719aa; width: 22px; height: 22px; border-radius: 4px;
+                   display: grid; place-items: center; font-style: normal; font-weight: 800; }
+  #search { flex: 0 1 380px; margin: 0 auto; padding: 5px 12px; border-radius: 6px; border: 0;
+            background: rgba(255,255,255,.2); color: #fff; outline: 0; }
+  #search::placeholder { color: rgba(255,255,255,.8); }
+  #search:focus { background: #fff; color: #242424; }
+  #saved { font-size: 12px; opacity: .85; min-width: 70px; text-align: right; }
+
+  /* ribbon */
+  #ribbon { display: flex; align-items: stretch; gap: 0; padding: 6px 8px; background: var(--ribbon);
+            border-bottom: 1px solid var(--line); overflow-x: auto; }
+  .group { display: flex; flex-direction: column; justify-content: space-between; padding: 0 10px;
+           border-right: 1px solid var(--line); }
+  .group:last-child { border-right: 0; }
+  .row { display: flex; gap: 2px; align-items: center; flex-wrap: nowrap; min-height: 30px; }
+  .glabel { font-size: 11px; color: var(--muted); text-align: center; margin-top: 2px; }
+  .rb { min-width: 30px; height: 30px; padding: 0 8px; border: 1px solid transparent; background: transparent;
+        border-radius: 4px; cursor: pointer; white-space: nowrap; }
+  .rb:hover { background: var(--hover); }
+  .rb.wide { padding: 0 10px; }
+  select.rb { background: var(--bg); border-color: var(--line); height: 28px; }
+  input[type=color] { width: 28px; height: 28px; padding: 0; border: 1px solid var(--line); background: none; border-radius: 4px; }
+
+  /* layout */
+  #app { flex: 1; display: grid; grid-template-columns: 210px 240px 1fr; min-height: 0; }
+  #nav { background: var(--nav); border-right: 1px solid var(--line); overflow-y: auto; padding: 8px 0; }
+  .nbname { padding: 8px 16px 12px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .sec { display: flex; align-items: center; gap: 10px; padding: 8px 14px; cursor: pointer; position: relative; }
+  .sec:hover { background: var(--hover); }
+  .sec.active { background: var(--sel); font-weight: 600; }
+  .sec .sw { width: 14px; height: 14px; border-radius: 3px; flex: none; cursor: pointer; }
+  .sec .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .x { opacity: 0; border: 0; background: none; cursor: pointer; color: var(--muted); border-radius: 4px; }
+  .sec:hover .x, .pg:hover .x { opacity: 1; }
+  .x:hover { background: var(--hover); color: var(--fg); }
+  .addbtn { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 9px 16px;
+            cursor: pointer; color: var(--brand); font-weight: 600; }
+  .addbtn:hover { background: var(--hover); }
+
+  #pages { border-right: 1px solid var(--line); overflow-y: auto; background: var(--bg); }
+  .pg { padding: 9px 14px; cursor: pointer; border-left: 3px solid transparent; display: flex; gap: 6px; align-items: center; }
+  .pg:hover { background: var(--hover); }
+  .pg.active { background: var(--sel); border-left-color: var(--sec, var(--brand)); }
+  .pg .info { flex: 1; min-width: 0; }
+  .pg .t { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pg .d { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hint { padding: 16px; color: var(--muted); }
+
+  /* canvas */
+  #canvasWrap { overflow-y: auto; background: var(--canvas); }
+  #canvas { max-width: 900px; margin: 0 auto; padding: 28px 40px 80px; }
+  #ptitle { width: 100%; border: 0; outline: 0; background: transparent; font: 300 32px/1.2 "Segoe UI Light", "Segoe UI", system-ui, sans-serif; color: var(--fg); }
+  #pdate { color: var(--muted); font-size: 12px; padding: 6px 0 10px; border-bottom: 2px solid var(--sec, var(--brand)); margin-bottom: 14px; }
+  #body { --fs: 16px; font-size: var(--fs); line-height: 1.8; outline: 0; min-height: 60vh; word-wrap: break-word; }
+  #body:empty::before { content: "Start typing…"; color: var(--muted); }
+  body.ruled #body { background-image: linear-gradient(to bottom, transparent calc(100% - 1px), var(--rule) 0);
+                     background-size: 100% 1.8em; }
+  #body h1 { font-size: 1.9em; margin: .2em 0; font-weight: 600; line-height: 1.3; }
+  #body h2 { font-size: 1.4em; margin: .2em 0; font-weight: 600; line-height: 1.3; }
+  #body h3 { font-size: 1.15em; margin: .2em 0; font-weight: 600; line-height: 1.3; }
+  #body p { margin: 0; }
+  #body table { border-collapse: collapse; margin: 8px 0; }
+  #body td { border: 1px solid var(--line); min-width: 90px; padding: 6px 10px; line-height: 1.4; }
+  #body a { color: var(--brand); }
+  #body hr { border: 0; border-top: 1px solid var(--line); }
+  #body .todo input { margin-right: 8px; accent-color: var(--brand); transform: scale(1.15); }
+
+  @media (max-width: 800px) {
+    #app { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr; }
+    #nav, #pages { display: flex; overflow-x: auto; overflow-y: hidden; padding: 0; border-right: 0; border-bottom: 1px solid var(--line); }
+    .nbname { display: none; } .sec, .pg { flex: none; } .pg { border-left: 0; }
+    #canvas { padding: 18px 16px 60px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="title">
+  <div class="logo"><i>N</i> Pro Note</div>
+  <input id="search" type="search" placeholder="Search all notes (Ctrl+E)" aria-label="Search notes">
+  <div id="saved">Saved</div>
+</div>
+
+<div id="ribbon">
+  <div class="group"><div class="row">
+    <button class="rb wide" id="bNewPage" title="New page (Ctrl+Alt+N)">＋ New Page</button>
+    <button class="rb wide" id="bImport">Import</button>
+    <button class="rb wide" id="bExport">Export</button>
+    <input type="file" id="file" accept=".txt,.md,.html,.htm" multiple hidden>
+  </div><div class="glabel">Page</div></div>
+
+  <div class="group"><div class="row">
+    <button class="rb" data-cmd="bold" title="Bold (Ctrl+B)"><b>B</b></button>
+    <button class="rb" data-cmd="italic" title="Italic (Ctrl+I)"><i>I</i></button>
+    <button class="rb" data-cmd="underline" title="Underline (Ctrl+U)"><u>U</u></button>
+    <button class="rb" data-cmd="strikeThrough" title="Strikethrough"><s>S</s></button>
+    <button class="rb" id="bHi" title="Highlight"><span style="background:#fff176;color:#000;padding:0 4px;border-radius:2px">ab</span></button>
+    <input type="color" id="fcolor" value="#c00000" title="Font color">
+    <button class="rb" data-cmd="removeFormat" title="Clear formatting">Tx</button>
+  </div>
+  <div class="row">
+    <button class="rb" data-cmd="insertUnorderedList" title="Bullets">• List</button>
+    <button class="rb" data-cmd="insertOrderedList" title="Numbering">1. List</button>
+    <button class="rb" data-cmd="outdent" title="Outdent">⇤</button>
+    <button class="rb" data-cmd="indent" title="Indent">⇥</button>
+  </div><div class="glabel">Basic Text</div></div>
+
+  <div class="group"><div class="row">
+    <select class="rb" id="style" title="Styles">
+      <option value="p">Normal</option><option value="h1">Heading 1</option>
+      <option value="h2">Heading 2</option><option value="h3">Heading 3</option>
+    </select>
+    <select class="rb" id="size" title="Font size">
+      <option value="2">Small</option><option value="3" selected>Medium</option>
+      <option value="4">Large</option><option value="5">X-Large</option>
+    </select>
+  </div><div class="glabel">Styles</div></div>
+
+  <div class="group"><div class="row">
+    <button class="rb wide" id="tTodo" title="To Do (Ctrl+1)">☑ To Do</button>
+    <button class="rb wide" id="tImp">★ Important</button>
+    <button class="rb wide" id="tQ">? Question</button>
+  </div><div class="glabel">Tags</div></div>
+
+  <div class="group"><div class="row">
+    <button class="rb wide" id="iTable">▦ Table</button>
+    <button class="rb wide" id="iLink">🔗 Link</button>
+    <button class="rb wide" id="iDate">📅 Date</button>
+    <button class="rb wide" id="iHr">― Line</button>
+  </div><div class="glabel">Insert</div></div>
+
+  <div class="group"><div class="row">
+    <button class="rb wide" id="vTheme">Dark</button>
+    <button class="rb wide" id="vRule">Rule Lines</button>
+    <button class="rb" id="zOut" title="Zoom out">A−</button>
+    <button class="rb" id="zIn" title="Zoom in">A+</button>
+  </div><div class="glabel">View</div></div>
+</div>
+
+<div id="app">
+  <div id="nav"></div>
+  <div id="pages"></div>
+  <div id="canvasWrap">
+    <div id="canvas">
+      <input id="ptitle" placeholder="Untitled page" aria-label="Page title">
+      <div id="pdate"></div>
+      <div id="body" contenteditable="true" spellcheck="true" aria-label="Page content"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const KEY = 'pronote:onenote:v1';
+  const COLORS = ['#7719aa', '#0078d4', '#107c10', '#d83b01', '#c239b3', '#038387', '#e3008c', '#ca5010'];
+  const uid = () => Math.random().toString(36).slice(2, 8) + Date.now().toString(36);
+  const body = $('body'), ptitle = $('ptitle');
+  let S = null, savedRange = null, timer;
+
+  // ---------- state ----------
+  function seed() {
+    const now = Date.now();
+    const mk = (title, html) => ({ id: uid(), title, html, created: now, modified: now });
+    const sec = (name, color, pages) => ({ id: uid(), name, color, pages });
+    const s1 = sec('Quick Notes', COLORS[0], [
+      mk('Welcome to Pro Note', '<h2>Your notebook, your way</h2><p>Sections on the left, pages in the middle, and a free-form canvas here.</p>' +
+        '<p><br></p><div class="todo"><input type="checkbox"> Try the <b>To Do</b> tag (Ctrl+1)</div>' +
+        '<div class="todo"><input type="checkbox" checked> Create a new page (Ctrl+Alt+N)</div>' +
+        '<div class="todo"><input type="checkbox"> Search every note with Ctrl+E</div><p><br></p>' +
+        '<p>Everything auto-saves in this browser. Use <b>Export</b> to download a page as a file.</p>')]);
+    const s2 = sec('Personal', COLORS[1], [mk('Ideas', '')]);
+    const s3 = sec('Work', COLORS[2], [mk('Meeting notes', '')]);
+    return { sections: [s1, s2, s3], sec: s1.id, page: s1.pages[0].id, theme: null, ruled: false, size: 16 };
+  }
+  function load() { try { return JSON.parse(localStorage.getItem(KEY)); } catch { return null; } }
+  function persist() {
+    try { localStorage.setItem(KEY, JSON.stringify(S)); $('saved').textContent = 'Saved'; }
+    catch { $('saved').textContent = 'Not saved'; }
+  }
+  function later() { $('saved').textContent = 'Saving…'; clearTimeout(timer); timer = setTimeout(persist, 400); }
+
+  const curSec = () => S.sections.find(s => s.id === S.sec);
+  const curPage = () => curSec().pages.find(p => p.id === S.page);
+  const plain = html => { const d = document.createElement('div'); d.innerHTML = html; return d.textContent.replace(/\s+/g, ' ').trim(); };
+  const fmtDate = t => new Date(t).toLocaleString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  const shortDate = t => new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
+  // ---------- rendering ----------
+  function renderNav() {
+    const nav = $('nav'); nav.innerHTML = '<div class="nbname">📓 My Notebook</div>';
+    S.sections.forEach(s => {
+      const el = document.createElement('div');
+      el.className = 'sec' + (s.id === S.sec ? ' active' : '');
+      el.innerHTML = '<span class="sw"></span><span class="nm"></span><button class="x" title="Delete section">✕</button>';
+      el.querySelector('.sw').style.background = s.color;
+      el.querySelector('.nm').textContent = s.name;
+      el.onclick = () => openPage(s.id, s.pages[0]?.id);
+      el.ondblclick = () => { const n = prompt('Rename section:', s.name); if (n) { s.name = n.trim(); renderNav(); persist(); } };
+      el.querySelector('.sw').onclick = e => { e.stopPropagation(); s.color = COLORS[(COLORS.indexOf(s.color) + 1) % COLORS.length]; refreshAll(); persist(); };
+      el.querySelector('.x').onclick = e => { e.stopPropagation(); delSection(s); };
+      nav.append(el);
+    });
+    const add = document.createElement('button'); add.className = 'addbtn'; add.textContent = '＋ Add section';
+    add.onclick = addSection; nav.append(add);
+  }
+  function renderPages(results) {
+    const box = $('pages'); box.innerHTML = '';
+    if (results) {
+      if (!results.length) box.innerHTML = '<div class="hint">No results found.</div>';
+      results.forEach(({ s, p }) => box.append(pageItem(s, p, true)));
+      return;
+    }
+    curSec().pages.forEach(p => box.append(pageItem(curSec(), p, false)));
+    const add = document.createElement('button'); add.className = 'addbtn'; add.textContent = '＋ Add page';
+    add.onclick = newPage; box.append(add);
+  }
+  function pageItem(s, p, withSection) {
+    const el = document.createElement('div');
+    el.className = 'pg' + (p.id === S.page ? ' active' : '');
+    el.style.setProperty('--sec', s.color);
+    el.innerHTML = '<div class="info"><div class="t"></div><div class="d"></div></div><button class="x" title="Delete page">✕</button>';
+    el.querySelector('.t').textContent = p.title || 'Untitled page';
+    el.querySelector('.d').textContent = (withSection ? s.name + ' · ' : '') + shortDate(p.modified) + '  ' + plain(p.html).slice(0, 40);
+    el.onclick = () => openPage(s.id, p.id);
+    el.querySelector('.x').onclick = e => { e.stopPropagation(); delPage(s, p); };
+    return el;
+  }
+  function refreshAll() {
+    renderNav(); renderPages($('search').value.trim() ? runSearch() : null);
+    const c = curSec().color; $('canvas').style.setProperty('--sec', c);
+  }
+  function openPage(secId, pageId) {
+    S.sec = secId; const s = curSec();
+    if (!s.pages.length) s.pages.push({ id: uid(), title: '', html: '', created: Date.now(), modified: Date.now() });
+    S.page = pageId && s.pages.some(p => p.id === pageId) ? pageId : s.pages[0].id;
+    const p = curPage();
+    ptitle.value = p.title; body.innerHTML = p.html; $('pdate').textContent = fmtDate(p.created);
+    refreshAll(); persist();
+  }
+
+  // ---------- add / delete ----------
+  function newPage() {
+    const p = { id: uid(), title: '', html: '', created: Date.now(), modified: Date.now() };
+    curSec().pages.push(p); $('search').value = ''; openPage(S.sec, p.id); ptitle.focus();
+  }
+  function addSection() {
+    const n = prompt('Section name:', 'New Section'); if (!n) return;
+    const s = { id: uid(), name: n.trim(), color: COLORS[S.sections.length % COLORS.length],
+                pages: [{ id: uid(), title: '', html: '', created: Date.now(), modified: Date.now() }] };
+    S.sections.push(s); openPage(s.id, s.pages[0].id);
+  }
+  function delPage(s, p) {
+    if (!confirm(`Delete page "${p.title || 'Untitled page'}"?`)) return;
+    s.pages.splice(s.pages.indexOf(p), 1);
+    if (!s.pages.length) s.pages.push({ id: uid(), title: '', html: '', created: Date.now(), modified: Date.now() });
+    openPage(s.id, s.pages[s.pages.length - 1].id);
+  }
+  function delSection(s) {
+    if (S.sections.length === 1) return alert('A notebook needs at least one section.');
+    if (!confirm(`Delete section "${s.name}" and all its pages?`)) return;
+    S.sections.splice(S.sections.indexOf(s), 1);
+    const next = S.sections[0]; openPage(next.id, next.pages[0].id);
+  }
+
+  // ---------- editing ----------
+  function touch() {
+    const p = curPage(); p.title = ptitle.value; p.html = body.innerHTML; p.modified = Date.now();
+    renderPages($('search').value.trim() ? runSearch() : null); later();
+  }
+  ptitle.addEventListener('input', touch);
+  ptitle.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); body.focus(); } });
+  body.addEventListener('input', touch);
+  body.addEventListener('click', e => {
+    if (e.target.matches('input[type=checkbox]')) { e.target.toggleAttribute('checked', e.target.checked); touch(); }
+  });
+  body.addEventListener('paste', e => {        // paste as plain text to keep pages clean
+    e.preventDefault();
+    document.execCommand('insertText', false, e.clipboardData.getData('text/plain'));
+  });
+  document.addEventListener('selectionchange', () => {
+    const sel = getSelection();
+    if (sel.rangeCount && body.contains(sel.anchorNode)) savedRange = sel.getRangeAt(0).cloneRange();
+  });
+  function focusBody() {
+    body.focus();
+    if (savedRange) { const sel = getSelection(); sel.removeAllRanges(); sel.addRange(savedRange); }
+  }
+  function exec(cmd, val) {
+    focusBody(); document.execCommand('styleWithCSS', false, true);
+    document.execCommand(cmd, false, val); touch();
+  }
+  const todoHTML = '<div class="todo"><input type="checkbox">&nbsp;</div>';
+  const insertHTML = html => { focusBody(); document.execCommand('insertHTML', false, html); touch(); };
+
+  // ---------- search ----------
+  function runSearch() {
+    const q = $('search').value.trim().toLowerCase(), out = [];
+    S.sections.forEach(s => s.pages.forEach(p => {
+      if ((p.title + ' ' + plain(p.html)).toLowerCase().includes(q)) out.push({ s, p });
+    }));
+    return out;
+  }
+  $('search').addEventListener('input', () => renderPages($('search').value.trim() ? runSearch() : null));
+
+  // ---------- import / export ----------
+  $('bExport').onclick = () => {
+    const p = curPage(), name = (p.title || 'Untitled page').replace(/[\\/:*?"<>|]/g, '_');
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${p.title}</title></head><body><h1>${p.title}</h1>${p.html}</body></html>`;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([html], { type: 'text/html' })); a.download = name + '.html'; a.click();
+    URL.revokeObjectURL(a.href);
+  };
+  $('bImport').onclick = () => $('file').click();
+  $('file').addEventListener('change', e => {
+    [...e.target.files].forEach(f => {
+      const r = new FileReader();
+      r.onload = () => {
+        const raw = String(r.result), isHtml = /\.html?$/i.test(f.name);
+        const esc = raw.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+        const html = isHtml ? (new DOMParser().parseFromString(raw, 'text/html').body.innerHTML)
+                            : esc.split('\n').map(l => `<p>${l || '<br>'}</p>`).join('');
+        const p = { id: uid(), title: f.name.replace(/\.\w+$/, ''), html, created: Date.now(), modified: Date.now() };
+        curSec().pages.push(p); openPage(S.sec, p.id);
+      };
+      r.readAsText(f);
+    });
+    e.target.value = '';
+  });
+
+  // ---------- ribbon wiring ----------
+  document.querySelectorAll('[data-cmd]').forEach(b => {
+    b.addEventListener('mousedown', e => e.preventDefault());
+    b.onclick = () => exec(b.dataset.cmd);
+  });
+  $('bNewPage').onclick = newPage;
+  $('bHi').addEventListener('mousedown', e => e.preventDefault());
+  $('bHi').onclick = () => exec('hiliteColor', '#fff176');
+  $('fcolor').addEventListener('input', e => exec('foreColor', e.target.value));
+  $('style').onchange = e => { exec('formatBlock', e.target.value); };
+  $('size').onchange = e => { exec('fontSize', e.target.value); };
+  $('tTodo').onclick = () => insertHTML(todoHTML);
+  $('tImp').onclick = () => { focusBody(); document.execCommand('insertText', false, '⭐ '); touch(); };
+  $('tQ').onclick = () => { focusBody(); document.execCommand('insertText', false, '❓ '); touch(); };
+  $('iTable').onclick = () => insertHTML('<table>' + '<tr><td><br></td><td><br></td><td><br></td></tr>'.repeat(3) + '</table><p><br></p>');
+  $('iLink').onclick = () => { const u = prompt('Link URL:', 'https://'); if (u) exec('createLink', u); };
+  $('iDate').onclick = () => { focusBody(); document.execCommand('insertText', false, new Date().toLocaleString()); touch(); };
+  $('iHr').onclick = () => exec('insertHorizontalRule');
+
+  function applyView() {
+    const dark = S.theme ? S.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    $('vTheme').textContent = dark ? 'Light' : 'Dark';
+    document.body.classList.toggle('ruled', !!S.ruled);
+    body.style.setProperty('--fs', S.size + 'px');
+  }
+  $('vTheme').onclick = () => { S.theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'; applyView(); persist(); };
+  $('vRule').onclick = () => { S.ruled = !S.ruled; applyView(); persist(); };
+  $('zIn').onclick = () => { S.size = Math.min(32, S.size + 2); applyView(); persist(); };
+  $('zOut').onclick = () => { S.size = Math.max(10, S.size - 2); applyView(); persist(); };
+
+  document.addEventListener('keydown', e => {
+    const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
+    if (!mod) return;
+    if (k === 'e' || (k === 'f' && !e.altKey)) { e.preventDefault(); $('search').focus(); $('search').select(); }
+    else if (e.altKey && k === 'n') { e.preventDefault(); newPage(); }
+    else if (k === '1') { e.preventDefault(); insertHTML(todoHTML); }
+  });
+
+  // ---------- init ----------
+  S = load();
+  if (!S || !S.sections?.length) S = seed();
+  applyView();
+  openPage(S.sections.some(s => s.id === S.sec) ? S.sec : S.sections[0].id, S.page);
+})();
+</script>
+</body>
+</html>
